@@ -1,0 +1,9 @@
+{
+  "name": "memory-mart",
+  "title": "Memory Mart!",
+  "subtitle": "A shared shopping-list memory game for Squidly calls",
+  "version": "1.0.0",
+  "description": "Preview a themed shopping list, remember the items, choose them from shelves, pack the purple bag, and review the result together in sync.",
+  "author": "Squidly App Builder",
+  "icon": "screen-shots/memory-mart-icon.png"
+}
