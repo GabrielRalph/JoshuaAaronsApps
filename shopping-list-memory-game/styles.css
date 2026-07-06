@@ -31,8 +31,16 @@ body {
   overflow: hidden;
 }
 
-button {
+button,
+access-button {
   font: inherit;
+}
+
+access-button {
+  color: inherit;
+  text-decoration: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 access-button.access-button-wrap {
@@ -648,11 +656,11 @@ grid-layout.product-grid > access-button.access-button-wrap {
   line-height: 0;
 }
 
-button.basket-slot {
+access-button.basket-slot {
   cursor: pointer;
 }
 
-button.basket-slot:hover {
+access-button.basket-slot:hover {
   transform: translateY(-4px);
 }
 

@@ -77,6 +77,18 @@ const ROUND_SIZES = [2, 3, 4, 5];
 const SQUIDLY_STATE_PATH = "game/state";
 const SQUIDLY_STATE_VERSION = 1;
 const SQUIDLY_VALUE_LIMIT = 5000;
+const ACCESS_TRANSITION_SETTLE_MS = 50;
+const ACCESS_TRANSITION_MAX_WAIT_MS = 12000;
+const ACCESS_GROUPS = Object.freeze({
+  shelf: "00-shelf-items",
+  basket: "01-basket-items",
+  progress: "02-progress",
+  home: "03-home",
+  mute: "04-mute",
+  themes: "00-themes",
+  start: "01-start",
+  retry: "00-retry",
+});
 
 const SHELF_POOL = [
   "partyHat",
@@ -407,13 +419,12 @@ class ShoppingMemoryGame {
     this.addStaticItem(scene, "jam", "home-item center-bag-item");
     this.addThemePicker(scene);
 
-    const play = scene.createChild("button", {
+    const play = this.createAccessButton(scene, {
       class: "play-button",
-      type: "button",
       "aria-label": "Play",
-    });
+    }, () => this.startGame(), { group: ACCESS_GROUPS.start });
     play.innerHTML = `${PLAY_ICON}<span>Play</span>`;
-    this.bindAction(play, () => this.startGame(), { group: "home" });
+    return this.waitForTransitionAnimations();
   }
 
   startGame() {
@@ -428,15 +439,17 @@ class ShoppingMemoryGame {
     this.checkComplete = false;
     this.roundLists = createRandomRoundLists(this.currentItemPool());
     this.shelfItemsByRound = [];
-    this.renderMemoryList();
+    const transition = this.renderMemoryList();
     this.publishSyncedState("start-game");
+    return transition;
   }
 
   selectTheme(theme) {
     this.theme = theme;
     this.playSound("button");
-    this.renderHome();
+    const transition = this.renderHome();
     this.publishSyncedState("select-theme");
+    return transition;
   }
 
   goHome() {
@@ -450,8 +463,9 @@ class ShoppingMemoryGame {
     this.checkComplete = false;
     this.shelfItemsByRound = [];
     this.roundLists = createRandomRoundLists(this.currentItemPool());
-    this.renderHome();
+    const transition = this.renderHome();
     this.publishSyncedState("home");
+    return transition;
   }
 
   renderMemoryList({ fromSync = false } = {}) {
@@ -473,18 +487,19 @@ class ShoppingMemoryGame {
 
     const tick = this.createTickButton(scene, "Go to the shelves", () => this.enterShelf());
     if (this.memoryReady) {
-      tick.disabled = false;
+      this.setActionDisabled(tick, false);
       tick.classList.add("is-visible");
-      return;
+      return this.waitForTransitionAnimations();
     }
 
-    tick.disabled = true;
-    delay(1450).then(() => {
+    this.setActionDisabled(tick, true);
+    return delay(1450).then(() => {
       if (this.screenToken !== token) return;
       this.memoryReady = true;
-      tick.disabled = false;
+      this.setActionDisabled(tick, false);
       tick.classList.add("is-visible");
       if (!fromSync) this.publishSyncedState("memory-ready");
+      return this.waitForTransitionAnimations();
     });
   }
 
@@ -492,8 +507,9 @@ class ShoppingMemoryGame {
     this.basket = [];
     this.memoryReady = true;
     this.checkComplete = false;
-    this.renderShelf();
+    const transition = this.renderShelf();
     this.publishSyncedState("enter-shelf");
+    return transition;
   }
 
   renderShelf() {
@@ -508,6 +524,7 @@ class ShoppingMemoryGame {
       const tick = this.createTickButton(scene, "Pack the bag", () => this.packBag());
       tick.classList.add("is-visible");
     }
+    return this.waitForTransitionAnimations();
   }
 
   addProductGrid(scene) {
@@ -521,7 +538,7 @@ class ShoppingMemoryGame {
       gridItem.style.setProperty("--item-order", index);
       if (this.basket.includes(itemId)) {
         button.classList.add("is-picked");
-        button.disabled = true;
+        this.setActionDisabled(button, true);
         button.setAttribute("aria-hidden", "true");
       }
       grid.add(gridItem, Math.floor(index / columns), index % columns);
@@ -533,16 +550,18 @@ class ShoppingMemoryGame {
     if (this.basket.length >= list.length || this.basket.includes(itemId)) return;
     this.basket.push(itemId);
     this.playSound("pick");
-    this.renderShelf();
+    const transition = this.renderShelf();
     this.publishSyncedState("add-item");
+    return transition;
   }
 
   removeFromBasket(index) {
     if (index < 0 || index >= this.basket.length) return;
     this.basket.splice(index, 1);
     this.playSound("remove");
-    this.renderShelf();
+    const transition = this.renderShelf();
     this.publishSyncedState("remove-item");
+    return transition;
   }
 
   addBasket(scene, slotCount) {
@@ -554,28 +573,29 @@ class ShoppingMemoryGame {
 
     for (let index = 0; index < slotCount; index += 1) {
       const itemId = this.basket[index];
-      const tag = itemId ? "button" : "div";
-      const slot = basket.createChild(tag, {
-        class: "basket-slot",
-        ...(itemId
-          ? {
-              type: "button",
+      const slot = itemId
+        ? this.createAccessButton(
+            basket,
+            {
+              class: "basket-slot",
               "aria-label": `Remove ${ITEMS[itemId].name}`,
-            }
-          : { "aria-hidden": "true" }),
-      });
+            },
+            () => this.removeFromBasket(index),
+            { group: ACCESS_GROUPS.basket }
+          )
+        : basket.createChild("div", { class: "basket-slot", "aria-hidden": "true" });
       if (itemId) {
         slot.classList.add("has-item");
         slot.appendChild(this.createItemArt(itemId));
-        this.bindAction(slot, () => this.removeFromBasket(index), { group: "basket" });
       }
     }
   }
 
   packBag() {
     this.checkComplete = false;
-    this.renderBagging();
+    const transition = this.renderBagging();
     this.publishSyncedState("pack-bag");
+    return transition;
   }
 
   async renderBagging({ fromSync = false } = {}) {
@@ -600,9 +620,12 @@ class ShoppingMemoryGame {
     if (this.screenToken === token) {
       await delay(220);
       this.checkComplete = false;
-      this.renderCheck({ fromSync });
+      const checkTransition = this.renderCheck({ fromSync });
       if (!fromSync) this.publishSyncedState("check-start");
+      await checkTransition;
     }
+
+    return this.waitForTransitionAnimations();
   }
 
   async renderCheck({ fromSync = false } = {}) {
@@ -658,7 +681,7 @@ class ShoppingMemoryGame {
       bag.classList.add("is-finished");
       const tick = this.createTickButton(scene, this.roundIndex === this.roundLists.length - 1 ? "See your score" : "Next shopping list", () => this.advanceAfterCheck());
       tick.classList.add("is-visible");
-      return;
+      return this.waitForTransitionAnimations();
     }
 
     await delay(260);
@@ -693,20 +716,22 @@ class ShoppingMemoryGame {
     if (!fromSync) this.publishSyncedState("check-complete");
     const tick = this.createTickButton(scene, this.roundIndex === this.roundLists.length - 1 ? "See your score" : "Next shopping list", () => this.advanceAfterCheck());
     tick.classList.add("is-visible");
+    return this.waitForTransitionAnimations();
   }
 
   advanceAfterCheck() {
     if (this.roundIndex === this.roundLists.length - 1) {
-      this.renderFinale();
+      const transition = this.renderFinale();
       this.publishSyncedState("finale");
-      return;
+      return transition;
     }
     this.roundIndex += 1;
     this.basket = [];
     this.memoryReady = false;
     this.checkComplete = false;
-    this.renderMemoryList();
+    const transition = this.renderMemoryList();
     this.publishSyncedState("next-round");
+    return transition;
   }
 
   renderFinale() {
@@ -724,50 +749,116 @@ class ShoppingMemoryGame {
       class: "final-score",
       content: `${this.correctItemCount}/${this.totalItemCount} correct items`,
     });
-    const retry = panel.createChild("button", {
+    const retry = this.createAccessButton(panel, {
       class: "retry-button",
-      type: "button",
       "aria-label": "Try again",
-    });
+    }, () => this.startGame(), { group: ACCESS_GROUPS.retry });
     retry.innerHTML = RETRY_ICON;
-    this.bindAction(retry, () => this.startGame(), { group: "finale" });
+    return this.waitForTransitionAnimations();
   }
 
   addPaper(scene, extraClass = "") {
     return scene.createChild("div", { class: `paper ${extraClass}`.trim() });
   }
 
-  bindAction(button, onActivate, { group = "game", once = false } = {}) {
+  createAccessButton(parent, props, onActivate, options) {
+    const button = parent ? parent.createChild("access-button", props) : new SvgPlus("access-button");
+    if (!parent) button.props = props;
+    this.bindAction(button, onActivate, options);
+    return button;
+  }
+
+  bindAction(control, onActivate, { group = "game", once = false } = {}) {
     const order = String(this.accessOrder);
-    const wrapper = new SvgPlus("access-button");
-    wrapper.props = {
-      class: "access-button-wrap",
-      "access-group": group,
-      "access-order": order,
-    };
-    button.setAttribute("access-group", group);
-    button.setAttribute("access-order", order);
+    const isAccessButton = control.tagName?.toLowerCase() === "access-button";
+    const accessButton = isAccessButton ? control : new SvgPlus("access-button");
+
+    if (!isAccessButton) {
+      accessButton.props = { class: "access-button-wrap" };
+      if (control.parentNode) {
+        control.parentNode.insertBefore(accessButton, control);
+        accessButton.appendChild(control);
+      } else {
+        accessButton.appendChild(control);
+      }
+    }
+
+    accessButton.setAttribute("access-group", group);
+    accessButton.setAttribute("access-order", order);
+    accessButton.setAttribute("role", "button");
+    if (!accessButton.hasAttribute("tabindex")) accessButton.tabIndex = 0;
     this.accessOrder += 1;
 
     const run = (event) => {
       event?.preventDefault();
       event?.stopPropagation();
-      if (button.disabled || button.getAttribute("aria-hidden") === "true") return;
-      if (once && button.dataset.activated === "true") return;
-      if (once) button.dataset.activated = "true";
-      onActivate(event);
+      const transition = this.runAccessAction(accessButton, onActivate, once, event);
+      if (event?.type === "access-click" && typeof event.waitFor === "function") event.waitFor(transition);
     };
 
-    if (button.parentNode) {
-      button.parentNode.insertBefore(wrapper, button);
-      wrapper.appendChild(button);
-    } else {
-      wrapper.appendChild(button);
+    const runFromKeyboard = (event) => {
+      if (event.repeat || (event.key !== "Enter" && event.key !== " ")) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (typeof accessButton.accessClick === "function") accessButton.accessClick("click");
+      else run(event);
+    };
+
+    control.accessWrapper = accessButton;
+    accessButton.accessWrapper = accessButton;
+    accessButton.addEventListener("access-click", run);
+    accessButton.addEventListener("keydown", runFromKeyboard);
+  }
+
+  async runAccessAction(accessButton, onActivate, once, event) {
+    try {
+      const isDisabled = accessButton.disabled || accessButton.getAttribute("aria-disabled") === "true" || accessButton.getAttribute("aria-hidden") === "true";
+      const alreadyActivated = once && accessButton.dataset.activated === "true";
+      if (!isDisabled && !alreadyActivated) {
+        if (once) accessButton.dataset.activated = "true";
+        await onActivate(event);
+      }
+    } catch (error) {
+      console.warn("Access button action failed.", error);
     }
-    button.accessWrapper = wrapper;
-    button.addEventListener("click", run);
-    button.addEventListener("access-click", run);
-    wrapper.addEventListener("access-click", run);
+
+    await this.waitForTransitionAnimations();
+  }
+
+  async waitForTransitionAnimations() {
+    await delay();
+    const startedAt = performance.now();
+
+    while (performance.now() - startedAt < ACCESS_TRANSITION_MAX_WAIT_MS) {
+      const animations = typeof document.getAnimations === "function"
+        ? document.getAnimations().filter((animation) => this.isFiniteActiveAnimation(animation))
+        : [];
+
+      if (animations.length === 0) break;
+
+      const remainingWait = Math.max(0, ACCESS_TRANSITION_MAX_WAIT_MS - (performance.now() - startedAt));
+      await Promise.race([
+        Promise.all(animations.map((animation) => animation.finished.catch(() => undefined))),
+        delay(remainingWait),
+      ]);
+      await delay();
+    }
+
+    await delay(ACCESS_TRANSITION_SETTLE_MS);
+  }
+
+  isFiniteActiveAnimation(animation) {
+    if (!animation || animation.playState === "finished" || animation.playState === "idle") return false;
+    const timing = animation.effect?.getTiming?.();
+    if (!timing || timing.iterations === Infinity) return false;
+    return Number.isFinite(Number(timing.duration)) || Number.isFinite(Number(timing.delay)) || Number.isFinite(Number(timing.endDelay));
+  }
+
+  setActionDisabled(button, disabled) {
+    button.disabled = disabled;
+    button.toggleAttribute("disabled", disabled);
+    button.setAttribute("aria-disabled", String(disabled));
+    button.tabIndex = disabled ? -1 : 0;
   }
 
   addShelfFurniture(scene) {
@@ -784,14 +875,11 @@ class ShoppingMemoryGame {
   }
 
   createItemButton(itemId, onClick) {
-    const button = new SvgPlus("button");
-    button.props = {
+    const button = this.createAccessButton(null, {
       class: "item-button",
-      type: "button",
       "aria-label": `Choose ${ITEMS[itemId].name}`,
-    };
+    }, onClick, { group: ACCESS_GROUPS.shelf });
     button.appendChild(this.createItemArt(itemId));
-    this.bindAction(button, onClick, { group: "shelf" });
     return button;
   }
 
@@ -803,20 +891,19 @@ class ShoppingMemoryGame {
   }
 
   createTickButton(parent, ariaLabel, onClick) {
-    const button = parent.createChild("button", {
-      class: "tick-button",
-      type: "button",
-      "aria-label": ariaLabel,
-    });
-    button.innerHTML = CHECK_ICON;
-    this.bindAction(
-      button,
+    const button = this.createAccessButton(
+      parent,
+      {
+        class: "tick-button",
+        "aria-label": ariaLabel,
+      },
       () => {
         this.playSound("button");
-        onClick();
+        return onClick();
       },
-      { group: "progress", once: true }
+      { group: ACCESS_GROUPS.progress, once: true }
     );
+    button.innerHTML = CHECK_ICON;
     return button;
   }
 
@@ -847,15 +934,14 @@ class ShoppingMemoryGame {
   }
 
   addSoundToggle(parent) {
-    const button = parent.createChild("button", { class: "sound-toggle", type: "button" });
-    this.updateSoundToggle(button);
-    this.bindAction(button, () => {
+    const button = this.createAccessButton(parent, { class: "sound-toggle" }, () => {
       const wasMuted = this.soundMuted;
       this.soundMuted = !this.soundMuted;
       this.updateSoundToggle(button);
       if (wasMuted) this.playSound("toggle");
       this.publishSyncedState(this.soundMuted ? "mute-sound" : "unmute-sound");
-    }, { group: "settings" });
+    }, { group: ACCESS_GROUPS.mute });
+    this.updateSoundToggle(button);
   }
 
   updateSoundToggle(button) {
@@ -865,13 +951,11 @@ class ShoppingMemoryGame {
   }
 
   addHomeButton(parent) {
-    const button = parent.createChild("button", {
+    const button = this.createAccessButton(parent, {
       class: "home-button",
-      type: "button",
       "aria-label": "Home",
-    });
+    }, () => this.goHome(), { group: ACCESS_GROUPS.home });
     button.innerHTML = HOME_ICON;
-    this.bindAction(button, () => this.goHome(), { group: "navigation" });
   }
 
   addTripBadge(parent) {
@@ -887,14 +971,12 @@ class ShoppingMemoryGame {
     const picker = parent.createChild("div", { class: "theme-picker", "aria-label": "Shopping trip theme" });
     for (const theme of SHOPPING_THEMES) {
       const isSelected = theme === this.theme;
-      const button = picker.createChild("button", {
+      const button = this.createAccessButton(picker, {
         class: `theme-choice ${isSelected ? "is-selected" : ""}`.trim(),
-        type: "button",
         "aria-label": theme.name,
         "aria-pressed": String(isSelected),
-      });
+      }, () => this.selectTheme(theme), { group: ACCESS_GROUPS.themes });
       button.innerHTML = `${themeIconSvg(theme.icon)}<span>${theme.name}</span>`;
-      this.bindAction(button, () => this.selectTheme(theme), { group: "themes" });
     }
   }
 
