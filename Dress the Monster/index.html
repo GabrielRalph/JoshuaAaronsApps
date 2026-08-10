@@ -1,0 +1,1165 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <title>Build a Monster Game</title>
+    <style>
+        :root {
+            --sky: #bee4fc;
+            --orange: #f58220;
+            --orange-dark: #d86409;
+            --ink: #303030;
+            --good: #2bff14;
+            --bad: #ff281f;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            overflow: hidden;
+            background: var(--sky);
+            font-family: Quicksand, "Trebuchet MS", Verdana, sans-serif;
+            color: var(--ink);
+            touch-action: none;
+            user-select: none;
+        }
+
+        #animation_container,
+        #canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #canvas {
+            background: var(--sky);
+        }
+
+        .reset-button {
+            position: fixed;
+            top: 2vh;
+            right: 2vw;
+            width: 20vw;
+            height: 12.5vh;
+            min-width: 128px;
+            min-height: 56px;
+            padding: 0;
+            border: 5px solid #000;
+            border-radius: 14px;
+            background: #fff;
+            color: var(--ink);
+            font: inherit;
+            font-size: clamp(22px, 3.2vw, 42px);
+            font-weight: 700;
+            z-index: 12;
+            cursor: pointer;
+            box-shadow: 6px 6px 8px rgba(0, 0, 0, .25);
+        }
+
+        .reset-button:hover,
+        .reset-button:focus-visible {
+            transform: translateY(-2px);
+            outline: 3px solid #111;
+            outline-offset: 2px;
+        }
+
+        .reset-button:active {
+            transform: translateY(1px);
+            box-shadow: 3px 3px 5px rgba(0, 0, 0, .25);
+        }
+
+        .modal-scrim {
+            position: fixed;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            background: rgba(0, 0, 0, .36);
+        }
+
+        .modal-scrim.open {
+            display: flex;
+        }
+
+        .question-modal {
+            width: min(960px, calc(100vw - 20px));
+            max-height: min(660px, calc(100vh - 20px));
+            padding: 44px 52px 40px;
+            border-radius: 4px;
+            background: #fff;
+            box-shadow: 0 14px 38px rgba(0, 0, 0, .28);
+        }
+
+        .question-text {
+            min-height: 86px;
+            margin: 0 0 38px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: clamp(42px, 7vw, 72px);
+            line-height: 1.05;
+            text-align: center;
+            font-weight: 400;
+        }
+
+        .answers {
+            display: flex;
+            justify-content: center;
+            gap: clamp(24px, 4vw, 38px);
+        }
+
+        .answer-option {
+            position: relative;
+            width: clamp(172px, 18vw, 198px);
+            height: clamp(186px, 25vh, 210px);
+            padding: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 5px solid #000;
+            border-radius: 16px;
+            background: #fff;
+            cursor: pointer;
+            box-shadow: 7px 7px 8px rgba(0, 0, 0, .28);
+            transition: background-color 100ms ease, transform 120ms ease;
+        }
+
+        .answer-option:hover,
+        .answer-option:focus-visible {
+            transform: translateY(-2px);
+            outline: none;
+        }
+
+        .answer-option.correct {
+            background: var(--good);
+        }
+
+        .answer-option.incorrect {
+            background: var(--bad);
+        }
+
+        .answer-option:disabled {
+            color: inherit;
+            cursor: default;
+            opacity: 1;
+        }
+
+        .answer-option img {
+            width: min(100%, 154px);
+            aspect-ratio: 1 / 1;
+            height: auto;
+            object-fit: contain;
+            display: block;
+        }
+
+        .new-game {
+            position: fixed;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 11;
+            background: rgba(0, 0, 0, .35);
+        }
+
+        .new-game.open {
+            display: flex;
+        }
+
+        .new-game-card {
+            width: min(420px, calc(100vw - 28px));
+            padding: 24px;
+            border-radius: 6px;
+            background: #fff;
+            text-align: center;
+            box-shadow: 0 14px 38px rgba(0, 0, 0, .28);
+        }
+
+        .new-game-card h2 {
+            margin: 0 0 18px;
+            font-size: 30px;
+        }
+
+        .primary-button {
+            min-width: 110px;
+            padding: 12px 22px;
+            border: 0;
+            border-radius: 5px;
+            background: var(--orange);
+            color: #fff;
+            font: inherit;
+            font-size: 20px;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 3px 0 var(--orange-dark);
+        }
+
+        access-button.squidly-access-proxy {
+            position: fixed;
+            display: block;
+            padding: 0;
+            border: 0;
+            border-radius: 0;
+            background: transparent;
+            opacity: .01;
+            cursor: pointer;
+            pointer-events: auto;
+        }
+
+        access-button.squidly-access-proxy[hidden] {
+            display: none;
+        }
+
+        access-button.squidly-canvas-access {
+            z-index: 9;
+        }
+
+        access-button.squidly-dom-access {
+            z-index: 14;
+        }
+
+        @media (max-width: 680px) {
+            .question-modal {
+                padding: 24px 18px 28px;
+            }
+
+            .question-text {
+                min-height: 64px;
+                margin-bottom: 22px;
+                font-size: clamp(34px, 8vw, 54px);
+            }
+
+            .answers {
+                gap: 12px;
+            }
+
+            .answer-option {
+                width: clamp(104px, 28vw, 136px);
+                height: clamp(128px, 29vh, 166px);
+                padding: 8px;
+                border-width: 4px;
+                border-radius: 12px;
+            }
+
+            .answer-option img {
+                width: min(100%, 112px);
+            }
+        }
+    </style>
+</head>
+<body shadow>
+    <button class="reset-button" id="resetButton" type="button">Reset</button>
+
+    <div id="animation_container">
+        <canvas id="canvas" width="1024" height="768" aria-label="Build a Monster game canvas"></canvas>
+    </div>
+
+    <div class="modal-scrim" id="questionModal" role="dialog" aria-modal="true" aria-labelledby="questionText">
+        <div class="question-modal">
+            <h1 class="question-text" id="questionText"></h1>
+            <div class="answers" id="answers"></div>
+        </div>
+    </div>
+
+    <div class="new-game" id="newGameModal" role="dialog" aria-modal="true" aria-labelledby="newGameTitle">
+        <div class="new-game-card">
+            <h2 id="newGameTitle">Would you like to play again?</h2>
+            <button class="primary-button" id="newGameButton">Yes</button>
+        </div>
+    </div>
+
+    <script src="plugins/createjs/createjs-1.2.3-7ca68e5827.min.js"></script>
+    <script src="games/build-a/js/build-a-1-57934dfb2f.js"></script>
+    <script>
+        (() => {
+            const canvas = document.getElementById("canvas");
+            const questionModal = document.getElementById("questionModal");
+            const questionText = document.getElementById("questionText");
+            const answersElement = document.getElementById("answers");
+            const resetButton = document.getElementById("resetButton");
+            const newGameModal = document.getElementById("newGameModal");
+            const newGameButton = document.getElementById("newGameButton");
+
+            const characterMaxHeightFactor = .5;
+            const characterMaxWidthFactor = .85;
+            const characterSpaceAboveContainerFactor = .1;
+            const buttonsMaxHeightFactor = .25;
+            const buttonSize = 69.4;
+            const buttonGap = 3;
+            const rowOffset = 71.4;
+            const totalItemsToWin = 20;
+            const itemAnimationDelay = 500;
+            const itemAnimationTime = 500;
+
+            const composition = AdobeAn.getComposition("buildArt");
+            const buildLib = composition.getLibrary();
+            const stage = new createjs.Stage(canvas);
+            let background;
+            let buttons;
+            let character;
+            let currentItem;
+            let busy = false;
+            let correctCount = 0;
+            let questionIndex = 0;
+            let questions = [];
+            let questionQueue = [];
+            let currentQuestion;
+            let currentAnswers = [];
+            let correctAnswerTimer = 0;
+            let winTimer = 0;
+            let newGameTimer = 0;
+
+            const squidlyStateKey = "build-a-monster/shared-state-v1";
+            const squidlyStateSchema = 1;
+            const squidlyActorId = globalThis.crypto?.randomUUID?.() || `actor-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+            let squidlyReady = false;
+            let applyingRemoteState = false;
+            let localRevision = 0;
+            let latestSharedUpdatedAt = 0;
+            let latestSharedMutationId = "";
+            let initialSyncReceived = false;
+            const seenActionIds = new Set();
+            const accessTargets = {
+                items: [],
+                answers: [],
+                reset: undefined,
+                newGame: undefined
+            };
+
+            const soundEffects = {
+                click: "games/sound/click.m4a",
+                correct: "games/sound/correct.m4a",
+                incorrect: "games/sound/boingShort.m4a",
+                whoosh: "games/sound/whooshDelay.m4a",
+                applause: "games/sound/childrenApplause.m4a"
+            };
+
+            const quizQuestionsUrl = "games/build-a/quiz-questions.json";
+
+            const itemLayout = [
+                item("btnGroup3A", "btnGroup3", 10),
+                item("btnGroup5A", "btnGroup5", 3),
+                item("btnGroup3B", "btnGroup3", 1),
+                item("btnGroup9A", "btnGroup9", 2),
+                item("btnGroup1A", "btnGroup1", 5),
+                item("btnGroup3C", "btnGroup3", 8),
+                item("btnGroup9B", "btnGroup9", 1),
+                item("btnGroup10A", "btnGroup10", 1),
+                item("btnGroup4A", "btnGroup4", 1),
+                item("btnGroup1B", "btnGroup1", 2),
+                item("btnGroup10B", "btnGroup10", 2),
+                item("btnGroup2A", "btnGroup2", 6),
+                item("btnGroup4B", "btnGroup4", 9),
+                item("btnGroup4C", "btnGroup4", 3),
+                item("btnGroup4D", "btnGroup4", 8),
+                item("btnGroup2B", "btnGroup2", 1),
+                item("btnGroup5B", "btnGroup5", 1),
+                item("btnGroup3D", "btnGroup3", 11),
+                item("btnGroup2C", "btnGroup2", 2),
+                item("btnGroup1C", "btnGroup1", 7)
+            ];
+
+            function item(buttonName, groupName, frame) {
+                return { buttonName, groupName, frame };
+            }
+
+            async function loadQuizQuestions() {
+                const response = await fetch(quizQuestionsUrl, { cache: "no-store" });
+                if (!response.ok) {
+                    throw new Error(`Unable to load ${quizQuestionsUrl}`);
+                }
+                const loadedQuestions = await response.json();
+                questions = loadedQuestions.map(normalizeQuestion);
+                questionQueue = shuffle(questions);
+            }
+
+            function normalizeQuestion(question, questionIndexValue) {
+                const answers = question.answers.map((answer, answerIndex) => ({
+                    id: `q${questionIndexValue}-a${answerIndex}`,
+                    src: answer.image,
+                    isCorrect: answer.correct === true
+                }));
+                if (answers.filter((answer) => answer.isCorrect).length !== 1) {
+                    throw new Error(`Question must have exactly one correct answer: ${question.question}`);
+                }
+                return {
+                    id: `q${questionIndexValue}`,
+                    text: formatQuestionText(question.question),
+                    answers
+                };
+            }
+
+            function formatQuestionText(question) {
+                const trimmed = question.trim().replace(/\?+$/, "");
+                return `${trimmed.charAt(0).toUpperCase()}${trimmed.slice(1)}?`;
+            }
+
+            function ensureSquidlyApi() {
+                if (window.SquidlyAPI) {
+                    return window.SquidlyAPI;
+                }
+                const listeners = new Map();
+                let channel;
+                try {
+                    channel = new BroadcastChannel("build-a-monster-squidly-sync");
+                    channel.onmessage = (event) => {
+                        const message = event.data;
+                        if (!message || message.sender === squidlyActorId || !message.key) {
+                            return;
+                        }
+                        if (message.type === "set") {
+                            localStorage.setItem(message.key, String(message.value));
+                            for (const listener of listeners.get(message.key) || []) {
+                                listener(message.value);
+                            }
+                        }
+                    };
+                } catch (_) {
+                    channel = undefined;
+                }
+                window.SquidlyAPI = {
+                    firebaseOnValue(key, callback) {
+                        if (!listeners.has(key)) {
+                            listeners.set(key, new Set());
+                        }
+                        listeners.get(key).add(callback);
+                        queueMicrotask(() => callback(localStorage.getItem(key)));
+                        return () => listeners.get(key)?.delete(callback);
+                    },
+                    firebaseSet(key, value) {
+                        localStorage.setItem(key, String(value));
+                        for (const listener of listeners.get(key) || []) {
+                            queueMicrotask(() => listener(value));
+                        }
+                        try {
+                            channel?.postMessage({ type: "set", sender: squidlyActorId, key, value });
+                        } catch (_) {
+                            // Local fallback only; Squidly provides the production transport.
+                        }
+                        return Promise.resolve();
+                    },
+                    setGridSize() {}
+                };
+                return window.SquidlyAPI;
+            }
+
+            function unwrapFirebaseValue(value) {
+                try {
+                    return value && typeof value.val === "function" ? value.val() : value;
+                } catch (_) {
+                    return value;
+                }
+            }
+
+            function parseSharedState(value) {
+                let raw = unwrapFirebaseValue(value);
+                if (typeof raw === "string") {
+                    try {
+                        raw = JSON.parse(raw);
+                    } catch (_) {
+                        return undefined;
+                    }
+                }
+                if (!raw || raw.app !== "build-a-monster" || raw.schema !== squidlyStateSchema) {
+                    return undefined;
+                }
+                return raw;
+            }
+
+            function getQuestionById(questionId) {
+                return questions.find((question) => question.id === questionId);
+            }
+
+            function getAnswerById(question, answerId) {
+                return question?.answers.find((answer) => answer.id === answerId);
+            }
+
+            function hydrateQuestionQueue(questionOrderIds) {
+                if (!Array.isArray(questionOrderIds) || questionOrderIds.length === 0) {
+                    return undefined;
+                }
+                const hydrated = questionOrderIds.map(getQuestionById).filter(Boolean);
+                return hydrated.length === questionOrderIds.length ? hydrated : undefined;
+            }
+
+            function currentQuestionOrderIds() {
+                return questionQueue.map((question) => question.id);
+            }
+
+            function currentAnswerOrderIds() {
+                return currentAnswers.map((answer) => answer.id);
+            }
+
+            function captureAnswerState() {
+                return Array.from(answersElement.querySelectorAll(".answer-option")).map((button) => ({
+                    answerId: button.dataset.answerId,
+                    correct: button.classList.contains("correct"),
+                    incorrect: button.classList.contains("incorrect"),
+                    disabled: button.disabled
+                }));
+            }
+
+            function captureSharedState(reason, action) {
+                const hiddenItemIndices = itemLayout
+                    .filter((entry) => entry.button && !entry.button.visible)
+                    .map((entry) => entry.index);
+                return {
+                    app: "build-a-monster",
+                    schema: squidlyStateSchema,
+                    mutationId: `${squidlyActorId}:${Date.now()}:${++localRevision}`,
+                    actorId: squidlyActorId,
+                    updatedAt: Date.now(),
+                    reason,
+                    action,
+                    correctCount,
+                    questionIndex,
+                    questionOrderIds: currentQuestionOrderIds(),
+                    currentItemIndex: currentItem?.index ?? null,
+                    currentQuestionId: currentQuestion?.id ?? null,
+                    currentAnswerOrderIds: currentAnswerOrderIds(),
+                    answerState: captureAnswerState(),
+                    busy,
+                    questionOpen: questionModal.classList.contains("open"),
+                    newGameOpen: newGameModal.classList.contains("open"),
+                    hiddenItemIndices
+                };
+            }
+
+            function publishSharedState(reason = "update", action) {
+                if (!squidlyReady || applyingRemoteState || questions.length === 0) {
+                    return;
+                }
+                const state = captureSharedState(reason, action);
+                const json = JSON.stringify(state);
+                if (new TextEncoder().encode(json).length > 5000) {
+                    console.warn("Squidly state write skipped because the payload exceeded the API limit.");
+                    return;
+                }
+                ensureSquidlyApi().firebaseSet(squidlyStateKey, json);
+            }
+
+            function publishAction(type, payload = {}) {
+                if (applyingRemoteState) {
+                    return;
+                }
+                const action = {
+                    id: `${squidlyActorId}:${Date.now()}:${Math.random().toString(36).slice(2)}`,
+                    actorId: squidlyActorId,
+                    type,
+                    payload
+                };
+                seenActionIds.add(action.id);
+                publishSharedState(`event:${type}`, action);
+            }
+
+            function applyRemoteState(state) {
+                if (!state || state.actorId === squidlyActorId) {
+                    return;
+                }
+                if (state.mutationId && state.mutationId === latestSharedMutationId) {
+                    return;
+                }
+                latestSharedMutationId = state.mutationId || latestSharedMutationId;
+                const updatedAt = Number(state.updatedAt) || 0;
+                latestSharedUpdatedAt = Math.max(latestSharedUpdatedAt, updatedAt || Date.now());
+                applyingRemoteState = true;
+                try {
+                    if (state.action && !seenActionIds.has(state.action.id)) {
+                        seenActionIds.add(state.action.id);
+                        executeRemoteAction(state.action, state);
+                    } else {
+                        applySharedSnapshot(state);
+                    }
+                } finally {
+                    applyingRemoteState = false;
+                }
+            }
+
+            function executeRemoteAction(action, state) {
+                const payload = action.payload || {};
+                if (action.type === "reset") {
+                    resetGame({ source: "remote", questionOrderIds: payload.questionOrderIds });
+                    return;
+                }
+                if (action.type === "item") {
+                    const entry = itemLayout[payload.itemIndex];
+                    if (entry) {
+                        itemButtonClicked(entry, {
+                            source: "remote",
+                            questionId: payload.questionId,
+                            answerOrderIds: payload.answerOrderIds
+                        });
+                    } else {
+                        applySharedSnapshot(state);
+                    }
+                    return;
+                }
+                if (action.type === "answer") {
+                    const button = answersElement.querySelector(`[data-answer-id="${payload.answerId}"]`);
+                    if (button) {
+                        answerClicked(button, payload.isCorrect === true, { source: "remote" });
+                    } else {
+                        applySharedSnapshot(state);
+                    }
+                }
+            }
+
+            function applySharedSnapshot(state) {
+                const hydratedQueue = hydrateQuestionQueue(state.questionOrderIds);
+                if (hydratedQueue) {
+                    questionQueue = hydratedQueue;
+                }
+                questionIndex = Math.max(0, Number(state.questionIndex) || 0);
+                correctCount = Math.max(0, Number(state.correctCount) || 0);
+                currentItem = Number.isInteger(state.currentItemIndex) ? itemLayout[state.currentItemIndex] : undefined;
+                const hiddenIndices = new Set(Array.isArray(state.hiddenItemIndices) ? state.hiddenItemIndices : []);
+                itemLayout.forEach((entry) => {
+                    if (entry.button) {
+                        entry.button.visible = !hiddenIndices.has(entry.index);
+                    }
+                });
+                character.resetCharacter();
+                itemLayout.forEach((entry) => {
+                    if (hiddenIndices.has(entry.index)) {
+                        character.setDressUpItem(entry.groupName, entry.frame);
+                    }
+                });
+                busy = state.busy === true;
+                if (state.questionOpen && state.currentQuestionId) {
+                    showQuestionModal({
+                        source: "remote",
+                        questionId: state.currentQuestionId,
+                        answerOrderIds: state.currentAnswerOrderIds,
+                        answerState: state.answerState,
+                        preserveQuestionIndex: true
+                    });
+                } else {
+                    questionModal.classList.remove("open");
+                    currentQuestion = undefined;
+                    currentAnswers = [];
+                    answersElement.innerHTML = "";
+                }
+                newGameModal.classList.toggle("open", state.newGameOpen === true);
+                refreshAccessTargets();
+                stage.update();
+            }
+
+            function initSquidlySync() {
+                const api = ensureSquidlyApi();
+                try {
+                    api.setGridSize?.(4, 5);
+                } catch (_) {
+                    // Optional Squidly overlay API.
+                }
+                squidlyReady = true;
+                api.firebaseOnValue(squidlyStateKey, (value) => {
+                    const state = parseSharedState(value);
+                    if (!initialSyncReceived) {
+                        initialSyncReceived = true;
+                        if (state) {
+                            applyRemoteState(state);
+                        } else {
+                            publishSharedState("initialise");
+                        }
+                        return;
+                    }
+                    if (state) {
+                        applyRemoteState(state);
+                    }
+                });
+                setTimeout(() => {
+                    if (!initialSyncReceived) {
+                        initialSyncReceived = true;
+                        publishSharedState("initialise");
+                    }
+                }, 500);
+            }
+
+            function createAccessTarget(group, order, label, onActivate, className) {
+                const accessButton = document.createElement("access-button");
+                accessButton.className = `squidly-access-proxy ${className}`;
+                accessButton.setAttribute("access-group", group);
+                accessButton.setAttribute("access-order", String(order));
+                accessButton.setAttribute("role", "button");
+                accessButton.setAttribute("aria-label", label);
+                accessButton.utteranceText = label;
+                accessButton.addEventListener("access-click", (event) => {
+                    event.preventDefault();
+                    onActivate(event);
+                });
+                accessButton.addEventListener("click", (event) => {
+                    if (!customElements.get("access-button")) {
+                        event.preventDefault();
+                        onActivate(event);
+                    }
+                });
+                document.body.appendChild(accessButton);
+                return accessButton;
+            }
+
+            function setAccessTargetRect(accessButton, rect, visible) {
+                if (!accessButton) {
+                    return;
+                }
+                const isVisible = visible && rect && rect.width > 1 && rect.height > 1;
+                accessButton.hidden = !isVisible;
+                accessButton.setAttribute("aria-hidden", isVisible ? "false" : "true");
+                if (!isVisible) {
+                    return;
+                }
+                accessButton.style.left = `${rect.left}px`;
+                accessButton.style.top = `${rect.top}px`;
+                accessButton.style.width = `${rect.width}px`;
+                accessButton.style.height = `${rect.height}px`;
+            }
+
+            function getDisplayObjectRect(displayObject) {
+                if (!displayObject) {
+                    return undefined;
+                }
+                const bounds = displayObject.getBounds?.() || displayObject.nominalBounds || { x: 0, y: 0, width: buttonSize, height: buttonSize };
+                const points = [
+                    displayObject.localToGlobal(bounds.x, bounds.y),
+                    displayObject.localToGlobal(bounds.x + bounds.width, bounds.y),
+                    displayObject.localToGlobal(bounds.x, bounds.y + bounds.height),
+                    displayObject.localToGlobal(bounds.x + bounds.width, bounds.y + bounds.height)
+                ];
+                const left = Math.min(...points.map((point) => point.x));
+                const right = Math.max(...points.map((point) => point.x));
+                const top = Math.min(...points.map((point) => point.y));
+                const bottom = Math.max(...points.map((point) => point.y));
+                return { left, top, width: right - left, height: bottom - top };
+            }
+
+            function ensureAccessTargets() {
+                itemLayout.forEach((entry, index) => {
+                    if (!accessTargets.items[index]) {
+                        const rowGroup = index < 10 ? "monster-items-a-top" : "monster-items-b-bottom";
+                        const rowOrder = index % 10 + 1;
+                        accessTargets.items[index] = createAccessTarget(rowGroup, rowOrder, `Monster item ${index + 1}`, () => {
+                            itemButtonClicked(entry, { source: "local" });
+                        }, "squidly-canvas-access");
+                    }
+                });
+                if (!accessTargets.reset) {
+                    accessTargets.reset = createAccessTarget("game-controls", 1, "Reset game", () => resetGame({ source: "local" }), "squidly-dom-access");
+                }
+                if (!accessTargets.newGame) {
+                    accessTargets.newGame = createAccessTarget("game-controls", 2, "Play again", () => resetGame({ source: "local" }), "squidly-dom-access");
+                }
+            }
+
+            function ensureAnswerAccessTargets() {
+                const answerButtons = Array.from(answersElement.querySelectorAll(".answer-option"));
+                while (accessTargets.answers.length < answerButtons.length) {
+                    const accessButton = createAccessTarget("quiz-answers", accessTargets.answers.length + 1, `Answer ${accessTargets.answers.length + 1}`, (event) => {
+                        event.currentTarget.activateAnswer?.();
+                    }, "squidly-dom-access");
+                    accessTargets.answers.push(accessButton);
+                }
+                accessTargets.answers.forEach((accessButton, index) => {
+                    const button = answerButtons[index];
+                    accessButton.activateAnswer = button ? () => answerClicked(button, button.dataset.correct === "true", { source: "local" }) : undefined;
+                    accessButton.setAttribute("aria-label", button ? `Answer ${index + 1}` : "Answer");
+                    accessButton.setAttribute("access-order", String(index + 1));
+                });
+            }
+
+            function refreshAccessTargets() {
+                ensureAccessTargets();
+                itemLayout.forEach((entry, index) => {
+                    setAccessTargetRect(accessTargets.items[index], getDisplayObjectRect(entry.button), !!entry.button?.visible);
+                });
+                setAccessTargetRect(accessTargets.reset, resetButton.getBoundingClientRect(), true);
+                const newGameOpen = newGameModal.classList.contains("open");
+                setAccessTargetRect(accessTargets.newGame, newGameButton.getBoundingClientRect(), newGameOpen);
+                const answerButtons = Array.from(answersElement.querySelectorAll(".answer-option"));
+                accessTargets.answers.forEach((accessButton, index) => {
+                    const button = answerButtons[index];
+                    setAccessTargetRect(accessButton, button?.getBoundingClientRect(), questionModal.classList.contains("open") && !!button);
+                });
+            }
+
+            function clearGameTimers() {
+                clearTimeout(correctAnswerTimer);
+                clearTimeout(winTimer);
+                clearTimeout(newGameTimer);
+                correctAnswerTimer = 0;
+                winTimer = 0;
+                newGameTimer = 0;
+            }
+
+            function CharacterDressUp(characterClip) {
+                this.initialize();
+                this.character = characterClip;
+                this.height = characterClip.nominalBounds.height;
+                this.width = characterClip.nominalBounds.width;
+                this.addChild(characterClip);
+                this.initDressUpItems();
+            }
+
+            CharacterDressUp.prototype = new createjs.Container();
+            CharacterDressUp.prototype.setScaleForCharacter = function setScaleForCharacter(maxHeight, maxWidth) {
+                let scale = maxHeight / this.character.nominalBounds.height;
+                this.setTransform(this.x, this.y, scale, scale);
+                this.height = this.character.nominalBounds.height * scale;
+                this.width = this.character.nominalBounds.width * scale;
+                if (this.width > maxWidth) {
+                    scale = maxWidth / this.character.nominalBounds.width;
+                    this.setTransform(this.x, this.y, scale, scale);
+                    this.height = this.character.nominalBounds.height * scale;
+                    this.width = this.character.nominalBounds.width * scale;
+                }
+                return scale;
+            };
+            CharacterDressUp.prototype.performDressUpAction = function performDressUpAction(groupName, frame) {
+                const group = this.character[groupName.replace("btnGroup", "group")];
+                if (!group) {
+                    return;
+                }
+                group.gotoAndStop(frame);
+                const targetX = group.x;
+                group.x = -700;
+                createjs.Tween.get(group).wait(itemAnimationDelay).to({ x: targetX }, itemAnimationTime, createjs.Ease.quadOut);
+            };
+            CharacterDressUp.prototype.setDressUpItem = function setDressUpItem(groupName, frame) {
+                const group = this.character[groupName.replace("btnGroup", "group")];
+                if (group) {
+                    group.gotoAndStop(frame);
+                }
+            };
+            CharacterDressUp.prototype.initDressUpItems = function initDressUpItems() {
+                for (let index = 1; index <= 10; index += 1) {
+                    const group = this.character[`group${index}`];
+                    if (group) {
+                        group.gotoAndStop(0);
+                    }
+                }
+            };
+            CharacterDressUp.prototype.resetCharacter = function resetCharacter() {
+                createjs.Tween.removeTweens(this.character);
+                this.character.rotation = 0;
+                this.initDressUpItems();
+            };
+            CharacterDressUp.prototype.performWinAction = function performWinAction() {
+                const jump = 150;
+                createjs.Tween.get(this.character)
+                    .to({ rotation: 360 }, 800)
+                    .to({ y: this.character.y - 40 }, jump)
+                    .to({ y: this.character.y }, jump)
+                    .to({ y: this.character.y - 40 }, jump)
+                    .to({ y: this.character.y }, jump)
+                    .to({ y: this.character.y - 40 }, jump)
+                    .to({ y: this.character.y }, jump);
+            };
+
+            function ButtonsContainer(buttonsClip) {
+                this.initialize();
+                this.buttonsClip = buttonsClip;
+                this.addChild(buttonsClip);
+                this.height = buttonsClip.nominalBounds.height;
+                this.width = buttonsClip.nominalBounds.width;
+            }
+
+            ButtonsContainer.prototype = new createjs.Container();
+            ButtonsContainer.prototype.setScaleForContainer = function setScaleForContainer(maxWidth, maxHeight) {
+                let scale = maxHeight / this.buttonsClip.nominalBounds.height;
+                this.setTransform(this.x, this.y, scale, scale);
+                this.width = this.buttonsClip.nominalBounds.width * scale;
+                this.height = this.buttonsClip.nominalBounds.height * scale;
+                if (this.width > maxWidth) {
+                    scale = maxWidth / this.buttonsClip.nominalBounds.width;
+                    this.setTransform(this.x, this.y, scale, scale);
+                    this.width = this.buttonsClip.nominalBounds.width * scale;
+                    this.height = this.buttonsClip.nominalBounds.height * scale;
+                }
+                return scale;
+            };
+            ButtonsContainer.prototype.initializeItemButtons = function initializeItemButtons() {
+                itemLayout.forEach((entry, index) => {
+                    const button = this.buttonsClip[entry.buttonName];
+                    if (!button) {
+                        return;
+                    }
+                    entry.index = index;
+                    entry.button = button;
+                    button.visible = true;
+                    button.mouseChildren = false;
+                    button.cursor = "pointer";
+                    button.gotoAndStop(entry.frame);
+                    button.x = (index % 10) * (buttonSize + buttonGap);
+                    button.y = index < 10 ? 0 : rowOffset;
+                    button.removeAllEventListeners("click");
+                    button.addEventListener("click", () => itemButtonClicked(entry, { source: "local" }));
+                });
+                refreshAccessTargets();
+            };
+
+            function init() {
+                createjs.Touch.enable(stage, true, true);
+                stage.enableMouseOver(10);
+                createjs.Ticker.framerate = buildLib.properties.fps || 24;
+                createjs.Ticker.addEventListener("tick", stage);
+
+                background = new buildLib.GameBackgroundArt();
+                stage.addChild(background);
+
+                character = new CharacterDressUp(new buildLib.CharacterDressup());
+                stage.addChild(character);
+
+                buttons = new ButtonsContainer(new buildLib.ItemsButtonContainer());
+                stage.addChild(buttons);
+
+                buttons.initializeItemButtons();
+                resetButton.addEventListener("click", () => resetGame({ source: "local" }));
+                newGameButton.addEventListener("click", () => {
+                    resetGame({ source: "local" });
+                });
+                window.addEventListener("resize", resizeGame);
+                resizeGame();
+                stage.update();
+                initSquidlySync();
+            }
+
+            function resizeGame() {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+                resizeBackground();
+                buttons.setScaleForContainer(canvas.width * .97, canvas.height * buttonsMaxHeightFactor);
+                buttons.x = canvas.width * .5 - buttons.width * .5;
+                buttons.y = canvas.height * .98 - buttons.height;
+                character.setScaleForCharacter(canvas.height * characterMaxHeightFactor, canvas.width * characterMaxWidthFactor);
+                character.x = canvas.width * .5;
+                character.y = buttons.y - character.height * .5 - canvas.height * characterSpaceAboveContainerFactor;
+                refreshAccessTargets();
+                stage.update();
+            }
+
+            function resizeBackground() {
+                if (!background.nominalBounds) {
+                    return;
+                }
+                const scale = canvas.height / background.nominalBounds.height;
+                background.setTransform(canvas.width / 2, 0, scale, scale);
+            }
+
+            function itemButtonClicked(itemEntry, options = {}) {
+                if (busy || !itemEntry.button || !itemEntry.button.visible) {
+                    return;
+                }
+                busy = true;
+                currentItem = itemEntry;
+                playSoundEffect("click");
+                const questionPayload = showQuestionModal(options);
+                if (options.source !== "remote" && questionPayload) {
+                    publishAction("item", {
+                        itemIndex: itemEntry.index,
+                        questionId: questionPayload.questionId,
+                        answerOrderIds: questionPayload.answerOrderIds
+                    });
+                }
+                refreshAccessTargets();
+            }
+
+            function showQuestionModal(options = {}) {
+                if (questionQueue.length === 0) {
+                    busy = false;
+                    return undefined;
+                }
+                if (!options.questionId && questionIndex >= questionQueue.length) {
+                    questionQueue = shuffle(questions);
+                    questionIndex = 0;
+                }
+                const question = options.questionId ? getQuestionById(options.questionId) : questionQueue[questionIndex];
+                if (!question) {
+                    busy = false;
+                    return undefined;
+                }
+                if (!options.preserveQuestionIndex) {
+                    const queueIndex = questionQueue.findIndex((queuedQuestion) => queuedQuestion.id === question.id);
+                    if (queueIndex >= 0) {
+                        questionIndex = Math.max(questionIndex, queueIndex + 1);
+                    } else {
+                        questionIndex += 1;
+                    }
+                }
+                currentQuestion = question;
+                questionText.textContent = question.text;
+                answersElement.innerHTML = "";
+                const answers = Array.isArray(options.answerOrderIds)
+                    ? options.answerOrderIds.map((answerId) => getAnswerById(question, answerId)).filter(Boolean)
+                    : shuffle(question.answers);
+                currentAnswers = answers.length === question.answers.length ? answers : shuffle(question.answers);
+                currentAnswers.forEach((answer, index) => {
+                    const button = document.createElement("button");
+                    button.type = "button";
+                    button.className = "answer-option";
+                    button.dataset.answerId = answer.id;
+                    button.dataset.correct = answer.isCorrect ? "true" : "false";
+                    button.innerHTML = `<img src="${answer.src}" alt="">`;
+                    button.addEventListener("click", () => answerClicked(button, answer.isCorrect, { source: "local" }));
+                    answersElement.appendChild(button);
+                });
+                if (Array.isArray(options.answerState)) {
+                    options.answerState.forEach((answerState) => {
+                        const button = answersElement.querySelector(`[data-answer-id="${answerState.answerId}"]`);
+                        if (!button) {
+                            return;
+                        }
+                        button.classList.toggle("correct", answerState.correct === true);
+                        button.classList.toggle("incorrect", answerState.incorrect === true);
+                        button.disabled = answerState.disabled === true;
+                    });
+                }
+                questionModal.classList.add("open");
+                ensureAnswerAccessTargets();
+                refreshAccessTargets();
+                requestAnimationFrame(() => {
+                    const firstAnswer = answersElement.querySelector("button");
+                    if (firstAnswer) {
+                        firstAnswer.focus({ preventScroll: true });
+                    }
+                });
+                return {
+                    questionId: question.id,
+                    answerOrderIds: currentAnswerOrderIds()
+                };
+            }
+
+            function answerClicked(button, isCorrect, options = {}) {
+                if (isCorrect) {
+                    button.classList.add("correct");
+                    answersElement.querySelectorAll(".answer-option").forEach((answerButton) => {
+                        answerButton.disabled = true;
+                    });
+                    playSoundEffect("correct");
+                    refreshAccessTargets();
+                    if (options.source !== "remote") {
+                        publishAction("answer", {
+                            answerId: button.dataset.answerId,
+                            isCorrect: true
+                        });
+                    }
+                    clearTimeout(correctAnswerTimer);
+                    correctAnswerTimer = setTimeout(() => correctAnswerClicked(options), 1200);
+                    return;
+                }
+                if (button.classList.contains("incorrect")) {
+                    return;
+                }
+                button.classList.add("incorrect");
+                playSoundEffect("incorrect");
+                refreshAccessTargets();
+                if (options.source !== "remote") {
+                    publishAction("answer", {
+                        answerId: button.dataset.answerId,
+                        isCorrect: false
+                    });
+                }
+            }
+
+            function correctAnswerClicked(options = {}) {
+                questionModal.classList.remove("open");
+                if (!currentItem || !currentItem.button) {
+                    busy = false;
+                    refreshAccessTargets();
+                    return;
+                }
+                correctCount += 1;
+                currentItem.button.visible = false;
+                character.performDressUpAction(currentItem.groupName, currentItem.frame);
+                playSoundEffect("whoosh");
+                if (options.source !== "remote") {
+                    publishSharedState("progress");
+                }
+                refreshAccessTargets();
+                if (correctCount >= totalItemsToWin) {
+                    clearTimeout(winTimer);
+                    winTimer = setTimeout(() => winGame(options), 1500);
+                    return;
+                }
+                setTimeout(() => {
+                    busy = false;
+                    if (options.source !== "remote") {
+                        publishSharedState("ready");
+                    }
+                    refreshAccessTargets();
+                    stage.update();
+                }, 1500);
+            }
+
+            function winGame(options = {}) {
+                character.performWinAction();
+                playSoundEffect("applause");
+                if (options.source !== "remote") {
+                    publishSharedState("win");
+                }
+                clearTimeout(newGameTimer);
+                newGameTimer = setTimeout(() => {
+                    busy = false;
+                    newGameModal.classList.add("open");
+                    if (options.source !== "remote") {
+                        publishSharedState("complete");
+                    }
+                    refreshAccessTargets();
+                }, 2300);
+            }
+
+            function resetGame(options = {}) {
+                clearGameTimers();
+                createjs.Tween.removeAllTweens();
+                correctCount = 0;
+                questionIndex = 0;
+                questionQueue = hydrateQuestionQueue(options.questionOrderIds) || shuffle(questions);
+                currentItem = undefined;
+                currentQuestion = undefined;
+                currentAnswers = [];
+                busy = false;
+                questionModal.classList.remove("open");
+                newGameModal.classList.remove("open");
+                answersElement.innerHTML = "";
+                character.resetCharacter();
+                buttons.initializeItemButtons();
+                resizeGame();
+                refreshAccessTargets();
+                if (options.source !== "remote") {
+                    publishAction("reset", {
+                        questionOrderIds: currentQuestionOrderIds()
+                    });
+                }
+            }
+
+            function shuffle(values) {
+                const copy = values.slice();
+                for (let index = copy.length - 1; index > 0; index -= 1) {
+                    const swapIndex = Math.floor(Math.random() * (index + 1));
+                    [copy[index], copy[swapIndex]] = [copy[swapIndex], copy[index]];
+                }
+                return copy;
+            }
+
+            function playSoundEffect(kind) {
+                const src = soundEffects[kind];
+                if (!src) {
+                    return;
+                }
+                const audio = new Audio(src);
+                audio.volume = .95;
+                audio.play().catch(() => undefined);
+            }
+
+            loadQuizQuestions()
+                .then(init)
+                .catch((error) => console.error(error));
+        })();
+    </script>
+</body>
+</html>
