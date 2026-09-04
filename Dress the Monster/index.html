@@ -371,6 +371,10 @@
                 return { buttonName, groupName, frame };
             }
 
+            function isKnownDressUpFrame(groupName, frame) {
+                return Number.isInteger(frame) && itemLayout.some((entry) => entry.groupName === groupName && entry.frame === frame);
+            }
+
             async function loadQuizQuestions() {
                 const response = await fetch(quizQuestionsUrl, { cache: "no-store" });
                 if (!response.ok) {
@@ -507,6 +511,16 @@
                 }));
             }
 
+            function captureDressUpFrames() {
+                return itemLayout.reduce((frames, entry) => {
+                    const group = character?.character?.[entry.groupName.replace("btnGroup", "group")];
+                    if (group && isKnownDressUpFrame(entry.groupName, group.currentFrame)) {
+                        frames[entry.groupName] = group.currentFrame;
+                    }
+                    return frames;
+                }, {});
+            }
+
             function captureSharedState(reason, action) {
                 const hiddenItemIndices = itemLayout
                     .filter((entry) => entry.button && !entry.button.visible)
@@ -529,6 +543,7 @@
                     busy,
                     questionOpen: questionModal.classList.contains("open"),
                     newGameOpen: newGameModal.classList.contains("open"),
+                    dressUpFrames: captureDressUpFrames(),
                     hiddenItemIndices
                 };
             }
@@ -627,11 +642,20 @@
                     }
                 });
                 character.resetCharacter();
-                itemLayout.forEach((entry) => {
-                    if (hiddenIndices.has(entry.index)) {
-                        character.setDressUpItem(entry.groupName, entry.frame);
-                    }
-                });
+                if (state.dressUpFrames && typeof state.dressUpFrames === "object") {
+                    Object.entries(state.dressUpFrames).forEach(([groupName, frame]) => {
+                        const normalizedFrame = Number(frame);
+                        if (isKnownDressUpFrame(groupName, normalizedFrame)) {
+                            character.setDressUpItem(groupName, normalizedFrame);
+                        }
+                    });
+                } else {
+                    itemLayout.forEach((entry) => {
+                        if (hiddenIndices.has(entry.index)) {
+                            character.setDressUpItem(entry.groupName, entry.frame);
+                        }
+                    });
+                }
                 busy = state.busy === true;
                 if (state.questionOpen && state.currentQuestionId) {
                     showQuestionModal({
