@@ -5,5 +5,5 @@
   "version": "17.0.0",
   "description": "An accessible shared phonics game with randomized picture-word quizzes, drag-and-drop, click selection, switch access and eye-gaze support.",
   "author": "Joshua Aarons",
-  "icon": "./images/feed-the-shark-logo.png"
+  "icon": "./icon.svg"
 }

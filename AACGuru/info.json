@@ -5,5 +5,5 @@
   "version": "3.8.5",
   "description": "A comprehensive AAC evaluation tool covering visual, vocabulary and expressive symbol subtests.",
   "author": "Hump Software",
-  "icon": "./images/genie-logo.png"
+  "icon": "./icon.svg"
 }
