@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Dress the Monster – Open mode mockup</title>
+    <style>
+        :root {
+            --sky: #bee4fc;
+            --orange: #f58220;
+            --orange-dark: #d86409;
+            --ink: #303030;
+            --good: #2bff14;
+            --bad: #ff281f;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: var(--sky);
+            font-family: Quicksand, "Trebuchet MS", Verdana, sans-serif;
+            color: var(--ink);
+            user-select: none;
+        }
+
+        .bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            background: rgba(255, 255, 255, .55);
+        }
+
+        .bar strong { font-size: 18px; }
+
+        .bar label { font-size: 15px; font-weight: 700; margin-left: 10px; }
+
+        .bar select,
+        .bar button {
+            font: inherit;
+            font-size: 15px;
+            font-weight: 700;
+            padding: 6px 12px;
+            border: 3px solid #000;
+            border-radius: 8px;
+            background: #fff;
+            cursor: pointer;
+        }
+
+        .bar button.active { background: var(--orange); color: #fff; }
+
+        .bar .group { display: inline-flex; align-items: center; gap: 6px; }
+
+        .bar .group[hidden] { display: none; }
+
+        .bar .mode-group { padding: 4px 8px; border: 3px solid #000; border-radius: 10px; background: #fff7ef; }
+
+        .stage {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 22px;
+            padding: 28px 16px 140px;
+        }
+
+        .monster {
+            position: relative;
+            width: 220px;
+            height: 220px;
+            border-radius: 50%;
+            border: 5px solid #000;
+            background: #8ed66b;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 110px;
+            box-shadow: 7px 7px 8px rgba(0, 0, 0, .28);
+        }
+
+        .worn {
+            min-height: 44px;
+            max-width: 560px;
+            text-align: center;
+            font-size: 34px;
+            letter-spacing: 4px;
+        }
+
+        .progress { font-size: 20px; font-weight: 700; }
+
+        .items {
+            display: grid;
+            grid-template-columns: repeat(10, 64px);
+            gap: 6px;
+        }
+
+        .item {
+            width: 64px;
+            height: 64px;
+            border: 3px solid #000;
+            border-radius: 10px;
+            background: #fff;
+            font-size: 30px;
+            cursor: pointer;
+            box-shadow: 4px 4px 6px rgba(0, 0, 0, .25);
+        }
+
+        .item[hidden] { visibility: hidden; display: block; }
+
+        .modal-scrim {
+            position: fixed;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            background: rgba(0, 0, 0, .36);
+        }
+
+        .modal-scrim.open { display: flex; }
+
+        .question-modal {
+            width: min(960px, calc(100vw - 20px));
+            padding: 40px 52px 36px;
+            border-radius: 4px;
+            background: #fff;
+            box-shadow: 0 14px 38px rgba(0, 0, 0, .28);
+        }
+
+        .question-text {
+            margin: 0 0 10px;
+            text-align: center;
+            font-size: clamp(42px, 7vw, 72px);
+            line-height: 1.05;
+            font-weight: 400;
+        }
+
+        .question-hint {
+            margin: 0 0 30px;
+            text-align: center;
+            font-size: 18px;
+            color: #666;
+        }
+
+        .answers {
+            display: flex;
+            justify-content: center;
+            gap: clamp(24px, 4vw, 38px);
+        }
+
+        .answer-option {
+            width: clamp(150px, 18vw, 198px);
+            height: clamp(170px, 25vh, 210px);
+            padding: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 5px solid #000;
+            border-radius: 16px;
+            background: #fff;
+            font: inherit;
+            font-size: 96px;
+            font-weight: 700;
+            color: var(--ink);
+            cursor: pointer;
+            box-shadow: 7px 7px 8px rgba(0, 0, 0, .28);
+            transition: background-color 100ms ease, transform 120ms ease;
+        }
+
+        .answer-option:hover { transform: translateY(-2px); }
+
+        .answer-option.selected { outline: 8px solid var(--orange); outline-offset: -8px; }
+
+        .answer-option.correct { background: var(--good); }
+
+        .answer-option.incorrect { background: var(--bad); }
+
+        .answer-option:disabled { cursor: default; opacity: 1; }
+
+        .answer-option img {
+            width: min(100%, 154px);
+            aspect-ratio: 1 / 1;
+            object-fit: contain;
+            display: block;
+        }
+
+        .host-controls {
+            display: flex;
+            justify-content: center;
+            gap: 18px;
+            margin-top: 34px;
+            padding-top: 22px;
+            border-top: 2px dashed #ccc;
+        }
+
+        .host-controls[hidden] { display: none; }
+
+        .judge {
+            min-width: 180px;
+            padding: 14px 24px;
+            border: 4px solid #000;
+            border-radius: 12px;
+            font: inherit;
+            font-size: 26px;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 5px 5px 6px rgba(0, 0, 0, .25);
+        }
+
+        .judge.correct { background: var(--good); }
+
+        .judge.again { background: var(--bad); color: #fff; }
+
+        .judge.cancel { background: #fff; }
+
+        .new-game {
+            position: fixed;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 11;
+            background: rgba(0, 0, 0, .35);
+        }
+
+        .new-game.open { display: flex; }
+
+        .new-game-card {
+            width: min(420px, calc(100vw - 28px));
+            padding: 24px;
+            border-radius: 6px;
+            background: #fff;
+            text-align: center;
+        }
+
+        .primary-button {
+            min-width: 110px;
+            padding: 12px 22px;
+            border: 0;
+            border-radius: 5px;
+            background: var(--orange);
+            color: #fff;
+            font: inherit;
+            font-size: 20px;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 3px 0 var(--orange-dark);
+        }
+
+        .log {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            max-height: 120px;
+            overflow: auto;
+            padding: 6px 12px;
+            background: rgba(255, 255, 255, .9);
+            border-top: 2px solid #000;
+            font: 12px/1.5 Consolas, monospace;
+        }
+
+        .log b { display: block; font-family: inherit; }
+    </style>
+</head>
+<body>
+    <div class="bar">
+        <strong>Dress the Monster (mockup)</strong>
+        <div>
+            <span class="group">
+                <label>View as</label>
+                <button id="roleHost" class="active" type="button">Host</button>
+                <button id="roleClient" type="button">Client</button>
+            </span>
+            <span class="group mode-group" id="modeGroup">
+                <label>Mode</label>
+                <button data-mode="quiz" type="button">Quiz</button>
+                <button data-mode="open" class="active" type="button">Open</button>
+                <button data-mode="free" type="button">Free</button>
+                <label for="choiceCount">Choices</label>
+                <select id="choiceCount">
+                    <option value="2">2</option>
+                    <option value="3" selected>3</option>
+                    <option value="4">4</option>
+                </select>
+            </span>
+            <button id="resetButton" type="button">Reset</button>
+        </div>
+    </div>
+
+    <div class="stage">
+        <div class="monster" id="monster">👾</div>
+        <div class="worn" id="worn"></div>
+        <div class="progress" id="progress"></div>
+        <div class="items" id="items"></div>
+    </div>
+
+    <div class="modal-scrim" id="questionModal">
+        <div class="question-modal">
+            <h1 class="question-text" id="questionText">Your turn!</h1>
+            <p class="question-hint" id="hint"></p>
+            <div class="answers" id="answers"></div>
+            <div class="host-controls" id="hostControls">
+                <button class="judge correct" id="judgeCorrect" type="button">Correct</button>
+                <button class="judge again" id="judgeAgain" type="button">Try again</button>
+                <button class="judge cancel" id="judgeCancel" type="button">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="new-game" id="newGameModal">
+        <div class="new-game-card">
+            <h2>Would you like to play again?</h2>
+            <button class="primary-button" id="newGameButton" type="button">Yes</button>
+        </div>
+    </div>
+
+    <div class="log" id="log"><b>Sync actions this mode would publish (same channel as today):</b></div>
+
+    <script>
+        (() => {
+            const itemEmoji = ["🎩", "🕶️", "👑", "🧣", "🎀", "👓", "🧢", "🥾", "🎒", "👒", "🪖", "🧤", "👞", "🌂", "🎧", "💍", "🧦", "👔", "👗", "👢"];
+            // Sample of today's preset questions, using the real art.
+            const quizQuestions = [
+                { text: "What do you drink from?", answers: [
+                    { src: "../common/art/f/fork.jpg" },
+                    { src: "../common/art/p/plate-white.jpg" },
+                    { src: "../common/art/w/water-glass.jpg", correct: true }
+                ] },
+                { text: "What do cowboys ride?", answers: [
+                    { src: "../common/art/d/duck.jpg" },
+                    { src: "../common/art/c/cat.jpg" },
+                    { src: "../common/art/h/horse.jpg", correct: true }
+                ] },
+                { text: "Who cooks dinner?", answers: [
+                    { src: "../common/art/e/electrician.jpg" },
+                    { src: "../common/art/c/chef.jpg", correct: true },
+                    { src: "../common/art/f/fireman.jpg" }
+                ] }
+            ];
+            const itemsElement = document.getElementById("items");
+            const questionText = document.getElementById("questionText");
+            const modeGroup = document.getElementById("modeGroup");
+            const wornElement = document.getElementById("worn");
+            const progressElement = document.getElementById("progress");
+            const questionModal = document.getElementById("questionModal");
+            const answersElement = document.getElementById("answers");
+            const hostControls = document.getElementById("hostControls");
+            const hint = document.getElementById("hint");
+            const newGameModal = document.getElementById("newGameModal");
+            const logElement = document.getElementById("log");
+            const choiceCount = document.getElementById("choiceCount");
+
+            let role = "host";
+            let mode = "open";
+            let currentItem = null;
+            let selectedButton = null;
+            let locked = false;
+            let worn = [];
+            let quizIndex = 0;
+
+            function log(type, payload) {
+                const line = document.createElement("div");
+                line.textContent = `${new Date().toLocaleTimeString()}  ${type}  ${JSON.stringify(payload)}`;
+                logElement.appendChild(line);
+                logElement.scrollTop = logElement.scrollHeight;
+            }
+
+            function renderItems() {
+                itemsElement.innerHTML = "";
+                itemEmoji.forEach((emoji, index) => {
+                    const button = document.createElement("button");
+                    button.className = "item";
+                    button.type = "button";
+                    button.textContent = emoji;
+                    button.hidden = worn.includes(index);
+                    button.addEventListener("click", () => openQuestion(index));
+                    itemsElement.appendChild(button);
+                });
+                wornElement.textContent = worn.map((index) => itemEmoji[index]).join(" ");
+                progressElement.textContent = `Items on monster: ${worn.length} / ${itemEmoji.length}`;
+            }
+
+            function applyRole() {
+                // Mode is a host decision; the client just receives it via shared state.
+                modeGroup.hidden = role !== "host";
+                hostControls.hidden = role !== "host" || mode !== "open";
+                if (mode === "open") {
+                    hint.textContent = role === "host"
+                        ? "Ask your question. Client can answer out loud, in writing, or by tapping a number — then mark it."
+                        : "Tap a number, or tell your helper your answer.";
+                } else {
+                    hint.textContent = "";
+                }
+                document.getElementById("roleHost").classList.toggle("active", role === "host");
+                document.getElementById("roleClient").classList.toggle("active", role === "client");
+            }
+
+            function setMode(nextMode) {
+                mode = nextMode;
+                modeGroup.querySelectorAll("[data-mode]").forEach((button) => {
+                    button.classList.toggle("active", button.dataset.mode === mode);
+                });
+                choiceCount.disabled = mode !== "open";
+                questionModal.classList.remove("open");
+                applyRole();
+                log("mode", { mode });
+            }
+
+            function openQuestion(index) {
+                if (questionModal.classList.contains("open")) {
+                    return;
+                }
+                currentItem = index;
+                if (mode === "free") {
+                    log("item", { itemIndex: index, mode });
+                    dressMonster();
+                    return;
+                }
+                selectedButton = null;
+                locked = false;
+                answersElement.innerHTML = "";
+                if (mode === "quiz") {
+                    renderQuizQuestion();
+                } else {
+                    renderOpenQuestion();
+                }
+                questionModal.classList.add("open");
+            }
+
+            function renderQuizQuestion() {
+                const question = quizQuestions[quizIndex % quizQuestions.length];
+                quizIndex += 1;
+                questionText.textContent = question.text;
+                question.answers.forEach((answer, answerIndex) => {
+                    const button = document.createElement("button");
+                    button.type = "button";
+                    button.className = "answer-option";
+                    button.dataset.answerId = `quiz-${answerIndex}`;
+                    button.innerHTML = `<img src="${answer.src}" alt="">`;
+                    button.addEventListener("click", () => {
+                        if (locked || button.classList.contains("incorrect")) {
+                            return;
+                        }
+                        selectedButton = button;
+                        if (answer.correct) {
+                            judgeCorrect();
+                        } else {
+                            judgeAgain();
+                        }
+                    });
+                    answersElement.appendChild(button);
+                });
+                log("item", { itemIndex: currentItem, mode, question: question.text });
+            }
+
+            function renderOpenQuestion() {
+                questionText.textContent = "Your turn!";
+                const count = Number(choiceCount.value);
+                for (let number = 1; number <= count; number += 1) {
+                    const button = document.createElement("button");
+                    button.type = "button";
+                    button.className = "answer-option";
+                    button.textContent = String(number);
+                    button.dataset.answerId = `open-${number}`;
+                    button.addEventListener("click", () => selectAnswer(button));
+                    answersElement.appendChild(button);
+                }
+                log("item", { itemIndex: currentItem, mode, choices: count });
+            }
+
+            function dressMonster() {
+                questionModal.classList.remove("open");
+                worn.push(currentItem);
+                renderItems();
+                log("progress", { correctCount: worn.length });
+                if (worn.length >= itemEmoji.length) {
+                    setTimeout(() => newGameModal.classList.add("open"), 800);
+                }
+            }
+
+            function selectAnswer(button) {
+                if (locked) {
+                    return;
+                }
+                answersElement.querySelectorAll(".answer-option").forEach((answer) => {
+                    answer.classList.remove("selected", "incorrect");
+                });
+                button.classList.add("selected");
+                selectedButton = button;
+                log("select", { answerId: button.dataset.answerId });
+            }
+
+            function judgeCorrect() {
+                if (locked) {
+                    return;
+                }
+                locked = true;
+                if (selectedButton) {
+                    selectedButton.classList.add("correct");
+                }
+                answersElement.querySelectorAll(".answer-option").forEach((answer) => {
+                    answer.disabled = true;
+                });
+                log("answer", { answerId: selectedButton?.dataset.answerId ?? null, isCorrect: true });
+                setTimeout(dressMonster, 1200);
+            }
+
+            function judgeAgain() {
+                if (locked) {
+                    return;
+                }
+                if (selectedButton) {
+                    selectedButton.classList.remove("selected");
+                    selectedButton.classList.add("incorrect");
+                    log("answer", { answerId: selectedButton.dataset.answerId, isCorrect: false });
+                    selectedButton = null;
+                } else {
+                    log("answer", { answerId: null, isCorrect: false });
+                }
+            }
+
+            function cancelQuestion() {
+                questionModal.classList.remove("open");
+                log("cancel", { itemIndex: currentItem });
+            }
+
+            function reset() {
+                worn = [];
+                questionModal.classList.remove("open");
+                newGameModal.classList.remove("open");
+                renderItems();
+                log("reset", {});
+            }
+
+            document.getElementById("roleHost").addEventListener("click", () => { role = "host"; applyRole(); });
+            document.getElementById("roleClient").addEventListener("click", () => { role = "client"; applyRole(); });
+            modeGroup.querySelectorAll("[data-mode]").forEach((button) => {
+                button.addEventListener("click", () => setMode(button.dataset.mode));
+            });
+            document.getElementById("judgeCorrect").addEventListener("click", judgeCorrect);
+            document.getElementById("judgeAgain").addEventListener("click", judgeAgain);
+            document.getElementById("judgeCancel").addEventListener("click", cancelQuestion);
+            document.getElementById("resetButton").addEventListener("click", reset);
+            document.getElementById("newGameButton").addEventListener("click", reset);
+
+            applyRole();
+            renderItems();
+        })();
+    </script>
+</body>
+</html>

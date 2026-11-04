@@ -2,8 +2,8 @@
   "name": "Dress the Monster",
   "title": "Dress the Monster",
   "subtitle": "Accessible Shared Quiz Game",
-  "version": "1.0.0",
-  "description": "An accessible shared monster dress-up quiz game with synchronized item choices, answer feedback, sounds, animations, reset and completion state for Squidly sessions.",
+  "version": "1.1.0",
+  "description": "An accessible shared monster dress-up game for Squidly sessions with three host-selectable modes: Quiz (preset picture questions), Open (host asks anything, client answers verbally, in writing or by numbered choice, host marks it) and Free (tap to dress). Synchronized state, answer feedback, sounds, animations, reset and completion.",
   "author": "Joshua Aarons",
-  "icon": "./icon.svg"
+  "icon": "dress-the-monster-logo.png"
 }

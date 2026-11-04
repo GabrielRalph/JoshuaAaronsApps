@@ -75,6 +75,16 @@
             box-shadow: 3px 3px 5px rgba(0, 0, 0, .25);
         }
 
+        .reset-button[hidden] {
+            display: none;
+        }
+
+        .mode-button {
+            /* Sits directly left of Reset, tracking its width and min-width. */
+            right: calc(3.5vw + max(20vw, 128px));
+            font-size: clamp(18px, 2.6vw, 34px);
+        }
+
         .modal-scrim {
             position: fixed;
             inset: 0;
@@ -110,6 +120,21 @@
             font-weight: 400;
         }
 
+        .question-modal.open-mode .question-text {
+            margin-bottom: 6px;
+        }
+
+        .question-hint {
+            margin: 0 0 26px;
+            text-align: center;
+            font-size: clamp(16px, 1.8vw, 22px);
+            color: #555;
+        }
+
+        .question-hint:empty {
+            display: none;
+        }
+
         .answers {
             display: flex;
             justify-content: center;
@@ -138,6 +163,11 @@
             outline: none;
         }
 
+        .answer-option.selected {
+            outline: 8px solid var(--orange);
+            outline-offset: -8px;
+        }
+
         .answer-option.correct {
             background: var(--good);
         }
@@ -158,6 +188,56 @@
             height: auto;
             object-fit: contain;
             display: block;
+        }
+
+        .answer-option .answer-number {
+            font-size: clamp(64px, 9vw, 112px);
+            font-weight: 700;
+            line-height: 1;
+            color: var(--ink);
+        }
+
+        .host-controls {
+            display: flex;
+            justify-content: center;
+            gap: clamp(16px, 3vw, 28px);
+            margin-top: 34px;
+            padding-top: 24px;
+            border-top: 2px dashed #d0d0d0;
+        }
+
+        .host-controls[hidden] {
+            display: none;
+        }
+
+        .judge-button {
+            min-width: clamp(140px, 16vw, 200px);
+            padding: 14px 20px;
+            border: 5px solid #000;
+            border-radius: 16px;
+            background: #fff;
+            color: var(--ink);
+            font: inherit;
+            font-size: clamp(20px, 2.4vw, 30px);
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 7px 7px 8px rgba(0, 0, 0, .28);
+            transition: transform 120ms ease;
+        }
+
+        .judge-button:hover,
+        .judge-button:focus-visible {
+            transform: translateY(-2px);
+            outline: none;
+        }
+
+        .judge-button.judge-correct {
+            background: var(--good);
+        }
+
+        .judge-button.judge-again {
+            background: var(--bad);
+            color: #fff;
         }
 
         .new-game {
@@ -252,10 +332,25 @@
             .answer-option img {
                 width: min(100%, 112px);
             }
+
+            .host-controls {
+                gap: 10px;
+                margin-top: 22px;
+                padding-top: 16px;
+            }
+
+            .judge-button {
+                min-width: 0;
+                padding: 10px 12px;
+                border-width: 4px;
+                border-radius: 12px;
+                font-size: 18px;
+            }
         }
     </style>
 </head>
 <body shadow>
+    <button class="reset-button mode-button" id="modeButton" type="button">Mode: Quiz</button>
     <button class="reset-button" id="resetButton" type="button">Reset</button>
 
     <div id="animation_container">
@@ -263,9 +358,15 @@
     </div>
 
     <div class="modal-scrim" id="questionModal" role="dialog" aria-modal="true" aria-labelledby="questionText">
-        <div class="question-modal">
+        <div class="question-modal" id="questionCard">
             <h1 class="question-text" id="questionText"></h1>
+            <p class="question-hint" id="questionHint"></p>
             <div class="answers" id="answers"></div>
+            <div class="host-controls" id="hostControls" hidden>
+                <button class="judge-button judge-correct" id="judgeCorrect" type="button">Correct</button>
+                <button class="judge-button judge-again" id="judgeAgain" type="button">Try again</button>
+                <button class="judge-button" id="judgeCancel" type="button">Cancel</button>
+            </div>
         </div>
     </div>
 
@@ -282,9 +383,16 @@
         (() => {
             const canvas = document.getElementById("canvas");
             const questionModal = document.getElementById("questionModal");
+            const questionCard = document.getElementById("questionCard");
             const questionText = document.getElementById("questionText");
+            const questionHint = document.getElementById("questionHint");
             const answersElement = document.getElementById("answers");
+            const hostControls = document.getElementById("hostControls");
+            const judgeCorrectButton = document.getElementById("judgeCorrect");
+            const judgeAgainButton = document.getElementById("judgeAgain");
+            const judgeCancelButton = document.getElementById("judgeCancel");
             const resetButton = document.getElementById("resetButton");
+            const modeButton = document.getElementById("modeButton");
             const newGameModal = document.getElementById("newGameModal");
             const newGameButton = document.getElementById("newGameButton");
 
@@ -298,6 +406,18 @@
             const totalItemsToWin = 20;
             const itemAnimationDelay = 500;
             const itemAnimationTime = 500;
+
+            const modes = ["quiz", "open", "free"];
+            const modeLabels = { quiz: "Mode: Quiz", open: "Mode: Open", free: "Mode: Free" };
+            // Open mode: host asks anything; numbered tiles are a pointing board and the host judges.
+            const openQuestion = {
+                id: "open",
+                text: "Your turn!",
+                answers: ["1", "2", "3"].map((label, index) => ({ id: `open-a${index}`, label, isCorrect: false }))
+            };
+            let mode = "quiz";
+            // Host by default so the game is fully usable outside Squidly; session info overrides this.
+            let role = "host";
 
             const composition = AdobeAn.getComposition("buildArt");
             const buildLib = composition.getLibrary();
@@ -331,7 +451,11 @@
                 items: [],
                 answers: [],
                 reset: undefined,
-                newGame: undefined
+                newGame: undefined,
+                mode: undefined,
+                judgeCorrect: undefined,
+                judgeAgain: undefined,
+                judgeCancel: undefined
             };
 
             const soundEffects = {
@@ -479,6 +603,9 @@
             }
 
             function getQuestionById(questionId) {
+                if (questionId === openQuestion.id) {
+                    return openQuestion;
+                }
                 return questions.find((question) => question.id === questionId);
             }
 
@@ -507,6 +634,7 @@
                     answerId: button.dataset.answerId,
                     correct: button.classList.contains("correct"),
                     incorrect: button.classList.contains("incorrect"),
+                    selected: button.classList.contains("selected"),
                     disabled: button.disabled
                 }));
             }
@@ -533,6 +661,7 @@
                     updatedAt: Date.now(),
                     reason,
                     action,
+                    mode,
                     correctCount,
                     questionIndex,
                     questionOrderIds: currentQuestionOrderIds(),
@@ -600,6 +729,13 @@
 
             function executeRemoteAction(action, state) {
                 const payload = action.payload || {};
+                if (action.type !== "mode" && state.mode && state.mode !== mode) {
+                    applyMode(state.mode);
+                }
+                if (action.type === "mode") {
+                    setMode(payload.mode, { source: "remote" });
+                    return;
+                }
                 if (action.type === "reset") {
                     resetGame({ source: "remote", questionOrderIds: payload.questionOrderIds });
                     return;
@@ -624,10 +760,30 @@
                     } else {
                         applySharedSnapshot(state);
                     }
+                    return;
+                }
+                if (action.type === "select") {
+                    const button = answersElement.querySelector(`[data-answer-id="${payload.answerId}"]`);
+                    if (button) {
+                        selectAnswer(button, { source: "remote" });
+                    } else {
+                        applySharedSnapshot(state);
+                    }
+                    return;
+                }
+                if (action.type === "judge") {
+                    if (!judgeAnswer(payload.isCorrect === true, { source: "remote", answerId: payload.answerId })) {
+                        applySharedSnapshot(state);
+                    }
+                    return;
+                }
+                if (action.type === "cancel") {
+                    cancelQuestion({ source: "remote" });
                 }
             }
 
             function applySharedSnapshot(state) {
+                applyMode(state.mode);
                 const hydratedQueue = hydrateQuestionQueue(state.questionOrderIds);
                 if (hydratedQueue) {
                     questionQueue = hydratedQueue;
@@ -670,6 +826,7 @@
                     currentQuestion = undefined;
                     currentAnswers = [];
                     answersElement.innerHTML = "";
+                    updateOpenQuestionUi();
                 }
                 newGameModal.classList.toggle("open", state.newGameOpen === true);
                 refreshAccessTargets();
@@ -705,6 +862,30 @@
                         publishSharedState("initialise");
                     }
                 }, 500);
+            }
+
+            function parseSquidlyRole(user) {
+                const value = String(user ?? "").toLowerCase();
+                if (value.startsWith("host")) {
+                    return "host";
+                }
+                if (value.startsWith("participant")) {
+                    return "client";
+                }
+                return undefined;
+            }
+
+            function initSquidlyRole() {
+                const api = ensureSquidlyApi();
+                if (typeof api.addSessionInfoListener !== "function") {
+                    return;
+                }
+                api.addSessionInfoListener((info) => {
+                    const detected = parseSquidlyRole(info?.user);
+                    if (detected) {
+                        setRole(detected);
+                    }
+                });
             }
 
             function createAccessTarget(group, order, label, onActivate, className) {
@@ -779,6 +960,18 @@
                 if (!accessTargets.newGame) {
                     accessTargets.newGame = createAccessTarget("game-controls", 2, "Play again", () => resetGame({ source: "local" }), "squidly-dom-access");
                 }
+                if (!accessTargets.mode) {
+                    accessTargets.mode = createAccessTarget("game-controls", 3, "Change mode", () => cycleMode({ source: "local" }), "squidly-dom-access");
+                }
+                if (!accessTargets.judgeCorrect) {
+                    accessTargets.judgeCorrect = createAccessTarget("host-judge", 1, "Mark correct", () => judgeAnswer(true, { source: "local" }), "squidly-dom-access");
+                }
+                if (!accessTargets.judgeAgain) {
+                    accessTargets.judgeAgain = createAccessTarget("host-judge", 2, "Try again", () => judgeAnswer(false, { source: "local" }), "squidly-dom-access");
+                }
+                if (!accessTargets.judgeCancel) {
+                    accessTargets.judgeCancel = createAccessTarget("host-judge", 3, "Cancel question", () => cancelQuestion({ source: "local" }), "squidly-dom-access");
+                }
             }
 
             function ensureAnswerAccessTargets() {
@@ -803,13 +996,19 @@
                     setAccessTargetRect(accessTargets.items[index], getDisplayObjectRect(entry.button), !!entry.button?.visible);
                 });
                 setAccessTargetRect(accessTargets.reset, resetButton.getBoundingClientRect(), true);
+                setAccessTargetRect(accessTargets.mode, modeButton.getBoundingClientRect(), isHost());
                 const newGameOpen = newGameModal.classList.contains("open");
                 setAccessTargetRect(accessTargets.newGame, newGameButton.getBoundingClientRect(), newGameOpen);
+                const questionOpen = questionModal.classList.contains("open");
                 const answerButtons = Array.from(answersElement.querySelectorAll(".answer-option"));
                 accessTargets.answers.forEach((accessButton, index) => {
                     const button = answerButtons[index];
-                    setAccessTargetRect(accessButton, button?.getBoundingClientRect(), questionModal.classList.contains("open") && !!button);
+                    setAccessTargetRect(accessButton, button?.getBoundingClientRect(), questionOpen && !!button);
                 });
+                const judgeVisible = questionOpen && !hostControls.hidden;
+                setAccessTargetRect(accessTargets.judgeCorrect, judgeCorrectButton.getBoundingClientRect(), judgeVisible);
+                setAccessTargetRect(accessTargets.judgeAgain, judgeAgainButton.getBoundingClientRect(), judgeVisible);
+                setAccessTargetRect(accessTargets.judgeCancel, judgeCancelButton.getBoundingClientRect(), judgeVisible);
             }
 
             function clearGameTimers() {
@@ -947,10 +1146,16 @@
                 newGameButton.addEventListener("click", () => {
                     resetGame({ source: "local" });
                 });
+                modeButton.addEventListener("click", () => cycleMode({ source: "local" }));
+                judgeCorrectButton.addEventListener("click", () => judgeAnswer(true, { source: "local" }));
+                judgeAgainButton.addEventListener("click", () => judgeAnswer(false, { source: "local" }));
+                judgeCancelButton.addEventListener("click", () => cancelQuestion({ source: "local" }));
                 window.addEventListener("resize", resizeGame);
+                setRole(role);
                 resizeGame();
                 stage.update();
                 initSquidlySync();
+                initSquidlyRole();
             }
 
             function resizeGame() {
@@ -975,6 +1180,76 @@
                 background.setTransform(canvas.width / 2, 0, scale, scale);
             }
 
+            function isHost() {
+                return role === "host";
+            }
+
+            function setRole(nextRole) {
+                role = nextRole === "client" ? "client" : "host";
+                modeButton.hidden = !isHost();
+                updateOpenQuestionUi();
+                refreshAccessTargets();
+            }
+
+            function applyMode(nextMode) {
+                if (!modes.includes(nextMode)) {
+                    return false;
+                }
+                mode = nextMode;
+                modeButton.textContent = modeLabels[mode];
+                return true;
+            }
+
+            function setMode(nextMode, options = {}) {
+                if (!applyMode(nextMode)) {
+                    return;
+                }
+                if (questionModal.classList.contains("open")) {
+                    closeQuestion();
+                }
+                refreshAccessTargets();
+                if (options.source !== "remote") {
+                    publishAction("mode", { mode });
+                }
+            }
+
+            function cycleMode(options = {}) {
+                setMode(modes[(modes.indexOf(mode) + 1) % modes.length], options);
+            }
+
+            function updateOpenQuestionUi() {
+                const isOpenQuestion = currentQuestion === openQuestion;
+                questionCard.classList.toggle("open-mode", isOpenQuestion);
+                questionHint.textContent = isOpenQuestion
+                    ? (isHost() ? "Ask your question, then mark the answer." : "Tap a number, or say your answer.")
+                    : "";
+                const judged = !!answersElement.querySelector(".answer-option.correct");
+                hostControls.hidden = !(isOpenQuestion && questionModal.classList.contains("open") && isHost() && !judged);
+            }
+
+            function closeQuestion() {
+                clearTimeout(correctAnswerTimer);
+                correctAnswerTimer = 0;
+                questionModal.classList.remove("open");
+                currentQuestion = undefined;
+                currentAnswers = [];
+                answersElement.innerHTML = "";
+                currentItem = undefined;
+                busy = false;
+                updateOpenQuestionUi();
+            }
+
+            function cancelQuestion(options = {}) {
+                if (!questionModal.classList.contains("open")) {
+                    return;
+                }
+                closeQuestion();
+                refreshAccessTargets();
+                if (options.source !== "remote") {
+                    publishAction("cancel");
+                }
+            }
+
             function itemButtonClicked(itemEntry, options = {}) {
                 if (busy || !itemEntry.button || !itemEntry.button.visible) {
                     return;
@@ -982,6 +1257,14 @@
                 busy = true;
                 currentItem = itemEntry;
                 playSoundEffect("click");
+                if (mode === "free") {
+                    if (options.source !== "remote") {
+                        publishAction("item", { itemIndex: itemEntry.index });
+                    }
+                    correctAnswerClicked(options);
+                    refreshAccessTargets();
+                    return;
+                }
                 const questionPayload = showQuestionModal(options);
                 if (options.source !== "remote" && questionPayload) {
                     publishAction("item", {
@@ -994,41 +1277,60 @@
             }
 
             function showQuestionModal(options = {}) {
-                if (questionQueue.length === 0) {
-                    busy = false;
-                    return undefined;
-                }
-                if (!options.questionId && questionIndex >= questionQueue.length) {
-                    questionQueue = shuffle(questions);
-                    questionIndex = 0;
-                }
-                const question = options.questionId ? getQuestionById(options.questionId) : questionQueue[questionIndex];
-                if (!question) {
-                    busy = false;
-                    return undefined;
-                }
-                if (!options.preserveQuestionIndex) {
-                    const queueIndex = questionQueue.findIndex((queuedQuestion) => queuedQuestion.id === question.id);
-                    if (queueIndex >= 0) {
-                        questionIndex = Math.max(questionIndex, queueIndex + 1);
-                    } else {
-                        questionIndex += 1;
+                const isOpenQuestion = options.questionId ? options.questionId === openQuestion.id : mode === "open";
+                let question;
+                if (isOpenQuestion) {
+                    question = openQuestion;
+                } else {
+                    if (questionQueue.length === 0) {
+                        busy = false;
+                        return undefined;
+                    }
+                    if (!options.questionId && questionIndex >= questionQueue.length) {
+                        questionQueue = shuffle(questions);
+                        questionIndex = 0;
+                    }
+                    question = options.questionId ? getQuestionById(options.questionId) : questionQueue[questionIndex];
+                    if (!question) {
+                        busy = false;
+                        return undefined;
+                    }
+                    if (!options.preserveQuestionIndex) {
+                        const queueIndex = questionQueue.findIndex((queuedQuestion) => queuedQuestion.id === question.id);
+                        if (queueIndex >= 0) {
+                            questionIndex = Math.max(questionIndex, queueIndex + 1);
+                        } else {
+                            questionIndex += 1;
+                        }
                     }
                 }
                 currentQuestion = question;
                 questionText.textContent = question.text;
                 answersElement.innerHTML = "";
-                const answers = Array.isArray(options.answerOrderIds)
-                    ? options.answerOrderIds.map((answerId) => getAnswerById(question, answerId)).filter(Boolean)
-                    : shuffle(question.answers);
-                currentAnswers = answers.length === question.answers.length ? answers : shuffle(question.answers);
-                currentAnswers.forEach((answer, index) => {
+                let answers;
+                if (isOpenQuestion) {
+                    answers = question.answers;
+                } else {
+                    answers = Array.isArray(options.answerOrderIds)
+                        ? options.answerOrderIds.map((answerId) => getAnswerById(question, answerId)).filter(Boolean)
+                        : shuffle(question.answers);
+                    if (answers.length !== question.answers.length) {
+                        answers = shuffle(question.answers);
+                    }
+                }
+                currentAnswers = answers;
+                currentAnswers.forEach((answer) => {
                     const button = document.createElement("button");
                     button.type = "button";
                     button.className = "answer-option";
                     button.dataset.answerId = answer.id;
                     button.dataset.correct = answer.isCorrect ? "true" : "false";
-                    button.innerHTML = `<img src="${answer.src}" alt="">`;
+                    if (isOpenQuestion) {
+                        button.innerHTML = `<span class="answer-number">${answer.label}</span>`;
+                        button.setAttribute("aria-label", `Option ${answer.label}`);
+                    } else {
+                        button.innerHTML = `<img src="${answer.src}" alt="">`;
+                    }
                     button.addEventListener("click", () => answerClicked(button, answer.isCorrect, { source: "local" }));
                     answersElement.appendChild(button);
                 });
@@ -1040,10 +1342,12 @@
                         }
                         button.classList.toggle("correct", answerState.correct === true);
                         button.classList.toggle("incorrect", answerState.incorrect === true);
+                        button.classList.toggle("selected", answerState.selected === true);
                         button.disabled = answerState.disabled === true;
                     });
                 }
                 questionModal.classList.add("open");
+                updateOpenQuestionUi();
                 ensureAnswerAccessTargets();
                 refreshAccessTargets();
                 requestAnimationFrame(() => {
@@ -1059,6 +1363,10 @@
             }
 
             function answerClicked(button, isCorrect, options = {}) {
+                if (currentQuestion === openQuestion) {
+                    selectAnswer(button, options);
+                    return;
+                }
                 if (isCorrect) {
                     button.classList.add("correct");
                     answersElement.querySelectorAll(".answer-option").forEach((answerButton) => {
@@ -1088,6 +1396,62 @@
                         isCorrect: false
                     });
                 }
+            }
+
+            function selectAnswer(button, options = {}) {
+                if (button.disabled || button.classList.contains("selected")) {
+                    return;
+                }
+                answersElement.querySelectorAll(".answer-option").forEach((answerButton) => {
+                    answerButton.classList.remove("selected", "incorrect");
+                });
+                button.classList.add("selected");
+                playSoundEffect("click");
+                refreshAccessTargets();
+                if (options.source !== "remote") {
+                    publishAction("select", { answerId: button.dataset.answerId });
+                }
+            }
+
+            function judgeAnswer(isCorrect, options = {}) {
+                if (currentQuestion !== openQuestion || !questionModal.classList.contains("open")) {
+                    return false;
+                }
+                if (answersElement.querySelector(".answer-option.correct")) {
+                    return true;
+                }
+                // No selection is valid: the client may have answered out loud or in writing.
+                const selected = options.source === "remote"
+                    ? (options.answerId ? answersElement.querySelector(`[data-answer-id="${options.answerId}"]`) : null)
+                    : answersElement.querySelector(".answer-option.selected");
+                if (isCorrect) {
+                    if (selected) {
+                        selected.classList.remove("selected");
+                        selected.classList.add("correct");
+                    }
+                    answersElement.querySelectorAll(".answer-option").forEach((answerButton) => {
+                        answerButton.disabled = true;
+                    });
+                    playSoundEffect("correct");
+                    updateOpenQuestionUi();
+                    refreshAccessTargets();
+                    if (options.source !== "remote") {
+                        publishAction("judge", { answerId: selected?.dataset.answerId ?? null, isCorrect: true });
+                    }
+                    clearTimeout(correctAnswerTimer);
+                    correctAnswerTimer = setTimeout(() => correctAnswerClicked(options), 1200);
+                    return true;
+                }
+                if (selected) {
+                    selected.classList.remove("selected");
+                    selected.classList.add("incorrect");
+                }
+                playSoundEffect("incorrect");
+                refreshAccessTargets();
+                if (options.source !== "remote") {
+                    publishAction("judge", { answerId: selected?.dataset.answerId ?? null, isCorrect: false });
+                }
+                return true;
             }
 
             function correctAnswerClicked(options = {}) {
@@ -1150,6 +1514,7 @@
                 questionModal.classList.remove("open");
                 newGameModal.classList.remove("open");
                 answersElement.innerHTML = "";
+                updateOpenQuestionUi();
                 character.resetCharacter();
                 buttons.initializeItemButtons();
                 resizeGame();
