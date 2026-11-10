@@ -1,0 +1,9 @@
+{
+  "name": "Castle Light",
+  "title": "Castle Light",
+  "subtitle": "Accessible Shared Platformer",
+  "version": "0.1.0",
+  "description": "A shared castle platformer for Squidly sessions using parallel play: host and participant each control their own knight with zero input lag, and see each other as a translucent ghost knight in the same level. The host leads level selection and menus; music and sound settings stay in sync.",
+  "author": "Joshua Aarons",
+  "icon": "castle-light-logo.png"
+}
